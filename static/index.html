@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Move Notation</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --card: #0f3460;
+    --accent: #e94560;
+    --accent2: #53d8fb;
+    --text: #eaeaea;
+    --text-dim: #8899aa;
+    --border: #2a3f5f;
+    --white-sq: #f0d9b5;
+    --black-sq: #b58863;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,.4);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    gap: 24px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    letter-spacing: .04em;
+    color: var(--accent2);
+  }
+  h1 span { color: var(--accent); }
+
+  .layout {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+    max-width: 900px;
+    flex-wrap: wrap;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  /* Upload panel */
+  .upload-panel {
+    flex: 1 1 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: .9rem;
+    color: var(--text-dim);
+  }
+  .turn-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+  .turn-dot.white { background: #fff; }
+  .turn-dot.black { background: #222; }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-dim);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent2);
+    background: rgba(83,216,251,.05);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 2.4rem; }
+  .drop-label { font-size: .95rem; }
+  .drop-sub { font-size: .8rem; }
+
+  #preview-img {
+    display: none;
+    width: 100%; border-radius: 8px;
+    max-height: 220px; object-fit: contain;
+    border: 1px solid var(--border);
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border: none; border-radius: 8px;
+    font-size: .95rem; font-weight: 600;
+    cursor: pointer; transition: opacity .15s, transform .1s;
+  }
+  .btn:hover { opacity: .88; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--card); color: var(--text); }
+  .btn-danger { background: #7c1e2e; color: #fff; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .toast {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: .88rem;
+    display: none;
+  }
+  .toast.success { background: rgba(83,216,251,.12); border: 1px solid var(--accent2); color: var(--accent2); }
+  .toast.error { background: rgba(233,69,96,.12); border: 1px solid var(--accent); color: #ff7a8a; }
+  .toast.info { background: rgba(255,255,255,.07); border: 1px solid var(--border); color: var(--text-dim); }
+
+  .spinner {
+    display: none;
+    width: 20px; height: 20px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Move history panel */
+  .history-panel {
+    flex: 1 1 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 560px;
+  }
+
+  .panel-title {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  .move-list {
+    flex: 1;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: .9rem;
+    line-height: 1.8;
+    color: var(--text);
+    max-height: 380px;
+    padding-right: 4px;
+  }
+  .move-list::-webkit-scrollbar { width: 4px; }
+  .move-list::-webkit-scrollbar-track { background: transparent; }
+  .move-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .move-pair { display: flex; gap: 4px; }
+  .move-num { color: var(--text-dim); min-width: 2.5em; }
+  .move-w { color: var(--text); min-width: 5em; }
+  .move-b { color: var(--text-dim); }
+
+  .latest-move {
+    background: rgba(83,216,251,.08);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 1.05rem;
+    font-family: 'Courier New', monospace;
+    color: var(--accent2);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* PGN modal */
+  .modal-bg {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 100%; max-width: 520px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .modal h2 { font-size: 1.1rem; color: var(--accent2); }
+  .pgn-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: .82rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 260px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<h1>Chess <span>Notation</span></h1>
+
+<div class="layout">
+
+  <!-- Upload panel -->
+  <div class="panel upload-panel">
+    <div class="status-bar">
+      <div class="turn-dot white" id="turn-dot"></div>
+      <span id="status-text">Move 1 — White to play</span>
+      <div class="spinner" id="spinner"></div>
+    </div>
+
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp">
+      <div class="drop-icon">♟</div>
+      <div class="drop-label">Drop board photo here</div>
+      <div class="drop-sub">or click to select · JPEG / PNG</div>
+    </div>
+
+    <img id="preview-img" alt="Board preview">
+
+    <div class="latest-move" id="latest-move">
+      <span id="latest-text" style="color:var(--text-dim)">No moves yet</span>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="submit-btn" disabled>Submit Move</button>
+      <button class="btn btn-secondary" id="new-game-btn">New Game</button>
+      <button class="btn btn-danger" id="end-game-btn">End Game</button>
+    </div>
+  </div>
+
+  <!-- History panel -->
+  <div class="panel history-panel">
+    <div class="panel-title">Move History</div>
+    <div class="move-list" id="move-list">
+      <span style="color:var(--text-dim);font-size:.85rem">No moves yet</span>
+    </div>
+    <div class="panel-title" id="outcome-text" style="display:none;color:var(--accent2)"></div>
+  </div>
+
+</div>
+
+<!-- PGN modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2>Game PGN</h2>
+    <div class="pgn-box" id="pgn-box"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="copy-pgn-btn">Copy PGN</button>
+      <button class="btn btn-secondary" id="close-modal-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
+const previewImg = document.getElementById('preview-img');
+const submitBtn = document.getElementById('submit-btn');
+const newGameBtn = document.getElementById('new-game-btn');
+const endGameBtn = document.getElementById('end-game-btn');
+const statusText = document.getElementById('status-text');
+const turnDot = document.getElementById('turn-dot');
+const spinner = document.getElementById('spinner');
+const toast = document.getElementById('toast');
+const moveList = document.getElementById('move-list');
+const latestText = document.getElementById('latest-text');
+const outcomeEl = document.getElementById('outcome-text');
+const modalBg = document.getElementById('modal-bg');
+const pgnBox = document.getElementById('pgn-box');
+const copyBtn = document.getElementById('copy-pgn-btn');
+const closeModalBtn = document.getElementById('close-modal-btn');
+
+let selectedFile = null;
+let gameOver = false;
+let allMoves = [];
+
+function showToast(msg, type = 'info') {
+  toast.textContent = msg;
+  toast.className = `toast ${type}`;
+  toast.style.display = 'block';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.style.display = 'none', 5000);
+}
+
+function updateStatus(state) {
+  const { turn, move_number, game_over, outcome, moves } = state;
+  allMoves = moves || [];
+  gameOver = game_over;
+
+  if (game_over) {
+    statusText.textContent = outcome || 'Game over';
+    turnDot.className = 'turn-dot';
+    submitBtn.disabled = true;
+    endGameBtn.disabled = false;
+  } else {
+    const side = turn === 'white' ? 'White' : 'Black';
+    statusText.textContent = `Move ${move_number} — ${side} to play`;
+    turnDot.className = `turn-dot ${turn}`;
+    endGameBtn.disabled = false;
+  }
+
+  if (outcome) {
+    outcomeEl.textContent = outcome;
+    outcomeEl.style.display = 'block';
+  } else {
+    outcomeEl.style.display = 'none';
+  }
+
+  renderMoves(moves || []);
+}
+
+function renderMoves(moves) {
+  if (!moves.length) {
+    moveList.innerHTML = '<span style="color:var(--text-dim);font-size:.85rem">No moves yet</span>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < moves.length; i += 2) {
+    const num = Math.floor(i / 2) + 1;
+    const w = moves[i] || '';
+    const b = moves[i + 1] || '';
+    html += `<div class="move-pair"><span class="move-num">${num}.</span><span class="move-w">${w}</span><span class="move-b">${b}</span></div>`;
+  }
+  moveList.innerHTML = html;
+  moveList.scrollTop = moveList.scrollHeight;
+}
+
+function setFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  const url = URL.createObjectURL(file);
+  previewImg.src = url;
+  previewImg.style.display = 'block';
+  submitBtn.disabled = gameOver;
+  showToast('Image selected. Click "Submit Move" to process.', 'info');
+}
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+
+submitBtn.addEventListener('click', async () => {
+  if (!selectedFile || gameOver) return;
+
+  submitBtn.disabled = true;
+  spinner.style.display = 'block';
+  showToast('Analyzing board with Claude…', 'info');
+
+  const form = new FormData();
+  form.append('image', selectedFile);
+
+  try {
+    const res = await fetch('/api/move', { method: 'POST', body: form });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.detail || 'Error identifying move.', 'error');
+      return;
+    }
+
+    latestText.textContent = data.move;
+    latestText.style.color = '';
+    showToast(`Move recorded: ${data.move}`, 'success');
+    updateStatus(data);
+
+    // Reset upload area for next move
+    selectedFile = null;
+    previewImg.style.display = 'none';
+    previewImg.src = '';
+    fileInput.value = '';
+    submitBtn.disabled = true;
+
+    if (data.game_over) {
+      showToast(`Game over — ${data.outcome || 'result determined'}`, 'success');
+    }
+  } catch (err) {
+    showToast('Network error. Please try again.', 'error');
+  } finally {
+    spinner.style.display = 'none';
+    if (!gameOver) submitBtn.disabled = !selectedFile;
+  }
+});
+
+newGameBtn.addEventListener('click', async () => {
+  if (!confirm('Start a new game? Current game will be lost.')) return;
+  await fetch('/api/new-game', { method: 'POST' });
+  gameOver = false;
+  allMoves = [];
+  selectedFile = null;
+  previewImg.style.display = 'none';
+  previewImg.src = '';
+  fileInput.value = '';
+  submitBtn.disabled = true;
+  latestText.textContent = 'No moves yet';
+  latestText.style.color = 'var(--text-dim)';
+  toast.style.display = 'none';
+  renderMoves([]);
+  statusText.textContent = 'Move 1 — White to play';
+  turnDot.className = 'turn-dot white';
+  outcomeEl.style.display = 'none';
+});
+
+endGameBtn.addEventListener('click', async () => {
+  if (!allMoves.length) {
+    showToast('No moves to export yet.', 'info');
+    return;
+  }
+  try {
+    const res = await fetch('/api/end-game', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.detail || 'Error.', 'error'); return; }
+    pgnBox.textContent = data.pgn;
+    modalBg.classList.add('open');
+    gameOver = true;
+    submitBtn.disabled = true;
+  } catch (err) {
+    showToast('Network error.', 'error');
+  }
+});
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(pgnBox.textContent);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => copyBtn.textContent = 'Copy PGN', 2000);
+  } catch {
+    showToast('Could not copy — select and copy manually.', 'info');
+  }
+});
+
+closeModalBtn.addEventListener('click', () => modalBg.classList.remove('open'));
+modalBg.addEventListener('click', e => { if (e.target === modalBg) modalBg.classList.remove('open'); });
+
+// Load initial state
+(async () => {
+  try {
+    const res = await fetch('/api/state');
+    const data = await res.json();
+    updateStatus(data);
+  } catch {}
+})();
+</script>
+</body>
+</html>
